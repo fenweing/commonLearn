@@ -31,7 +31,7 @@
         <appender-ref ref="RollingFile-Appender" />
  </appender>
  
- <logger name="guru.springframework.blog.logbackxml"  level="info" additivity="false">
+ <logger name="guru.springframework.blog.logbackxml"  level="info" additivity="false">//additivity=false-exlude log from root logger
         <appender-ref ref="Console-Appender" />
         <appender-ref ref="File-Appender" />
         <appender-ref ref="Async-Appender" />
