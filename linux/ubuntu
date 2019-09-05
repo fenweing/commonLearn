@@ -1,0 +1,10 @@
+Linux下无法使用add-apt-repository命令
+Error:
+add-apt-repository command not found
+Solution:
+sudo apt-get install python-software-properties
+sudo apt-get update
+Then:
+sudo apt install software-properties-common
+sudo apt-get update
+Done.
