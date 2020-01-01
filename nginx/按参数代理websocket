@@ -1,0 +1,345 @@
+nginx动态代理方案   
+那一剑的风情  那一剑的风情 发布于 2014/11/22 00:05 字数 1529 阅读 5250 收藏 127 点赞 9  评论 5
+0、需求：动态调整转发策略
+
+    数据库存放着大量的用户数据，需要制定一个策略，负载均衡服务器可以根据用户信息，动态转发请求。
+
+    比如A用户(001)的请求转发到A服务器(192.168.1.101)，B用户(002)的请求转发到B服务器(192.168.1.102)，C用户(003)的请求转发到A服务器(192.168.1.103)，等等。
+
+1、服务器上下文
+
+   前端nginx服务器 + N台后端应用服务器。准备用单台服务器模拟。
+
+   前端：192.168.1.101:80
+
+   后端：192.168.1.101:81
+
+
+2、技术头脑风暴
+
+    程序员们脑袋里开始有好几个方案了，有的是直觉，有的是经验，如下：
+
+a、写nginx模块，模块里实现读数据库或nosql，根据数据值做转发。
+
+b、找现成的模块，看能不能直接改根据或脚本就可以解决。据说ngx_lua很强大，可以考虑。
+
+c、服务器必须保证不能有任何阻塞，模块实现时得用nginx的subrequest机制。
+
+d、blalala...
+
+
+3、程序员的脑袋里装的什么呢？ 简单
+
+    任务1：web程序员A，写个http api接口，返回具体的服务器信息（ip+port）。
+
+    任务2：系统工程师B，做个nginx配置，根据A的api让nginx根据返回信息实现动态转发。
+
+
+4、开始实现：
+
+   任务1：分分钟搞定，写个php脚本呗。
+
+   任务2：继续拆解
+
+             任务2.1：实现最简单转发
+
+server {
+    listen  80;
+
+    location / {
+        proxy_pass  192.168.1.101:81;
+    }
+}
+
+
+server {
+    listen  81;
+
+    location / {
+        root  html;
+    }
+}
+            任务2.2：实现动态转发
+
+                 看下源码proxy_pass能不能使用变量
+
+static char *
+ngx_http_proxy_pass(ngx_conf_t *cf, ngx_command_t *cmd, void *conf)
+{
+    ...
+
+    value = cf->args->elts;
+
+    url = &value[1];
+
+    n = ngx_http_script_variables_count(url);  // 找到这里了，可以使用变量
+
+    if (n) {
+        ngx_memzero(&sc, sizeof(ngx_http_script_compile_t));
+
+        sc.cf = cf;
+        sc.source = url;  
+        ...
+     }
+     ...
+}
+        改下配置，测试ok，继续往下走
+server {
+    listen  80;
+
+    location / {
+        set  $url 192.168.1.101:81;
+        proxy_pass  $url;
+    }
+}
+            任务2.3：根据api设置变量$url的值
+
+                 好像没有现成的模块，脑袋里过滤了一遍，有的话必须是跟subrequest有关的模块，想起了 auth_request 模块，它可以配置一个http请求，根据http请求的返回结果决定给客户端是否正常访问，去看下源码先。
+
+static ngx_int_t
+ngx_http_auth_request_handler(ngx_http_request_t *r)
+{ 
+    ...
+    if (ctx != NULL) {
+        ...
+        if (ngx_http_auth_request_set_variables(r, arcf, ctx) != NGX_OK) {  // 看函数名感觉这里有干货
+            return NGX_ERROR;
+        }
+
+        /* return appropriate status */
+
+        if (ctx->status == NGX_HTTP_FORBIDDEN) { // 403
+            return ctx->status;
+        }
+        
+        // 200 and ...
+        if (ctx->status >= NGX_HTTP_OK
+            && ctx->status < NGX_HTTP_SPECIAL_RESPONSE)
+        {
+            return NGX_OK;
+        }
+
+        ngx_log_error(NGX_LOG_ERR, r->connection->log, 0,
+                      "auth request unexpected status: %d", ctx->status);
+
+        return NGX_HTTP_INTERNAL_SERVER_ERROR;
+    }  ...
+
+    return NGX_AGAIN;
+}
+           从源码我们掌握两个信息：1、api返回状态码要为200  2、ngx_http_auth_request_set_variables 可能有我们要的信息，继续查看：
+
+static ngx_int_t
+ngx_http_auth_request_set_variables(ngx_http_request_t *r,
+    ngx_http_auth_request_conf_t *arcf, ngx_http_auth_request_ctx_t *ctx)
+{
+    ...
+    cmcf = ngx_http_get_module_main_conf(r, ngx_http_core_module);
+    v = cmcf->variables.elts;
+
+    av = arcf->vars->elts;
+    last = av + arcf->vars->nelts;
+
+    // 遍历 arcf->vars 这个东东
+    while (av < last) {  
+        /*
+         * explicitly set new value to make sure it will be available after
+         * internal redirects
+         */
+
+        vv = &r->variables[av->index];
+
+        if (ngx_http_complex_value(ctx->subrequest, &av->value, &val)
+            != NGX_OK)
+        {
+            return NGX_ERROR;
+        }
+
+        vv->valid = 1;
+        vv->not_found = 0;
+        vv->data = val.data;
+        vv->len = val.len;
+
+        if (av->set_handler) {
+            /*
+             * set_handler only available in cmcf->variables_keys, so we store
+             * it explicitly
+             */
+
+            av->set_handler(r, vv, v[av->index].data);  // 设置变量
+        }
+
+        av++;
+    }
+
+    return NGX_OK;
+}
+           代码逻辑很简单，遍历这个模块的配置的某个成员，肯定是跟变量有关的了，找配置信息了
+static ngx_command_t  ngx_http_auth_request_commands[] = {
+
+    { ngx_string("auth_request"),
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE1,
+      ngx_http_auth_request,
+      NGX_HTTP_LOC_CONF_OFFSET,
+      0,
+      NULL },
+
+    { ngx_string("auth_request_set"), // 名称很像设置变量，就是它了
+      NGX_HTTP_MAIN_CONF|NGX_HTTP_SRV_CONF|NGX_HTTP_LOC_CONF|NGX_CONF_TAKE2,
+      ngx_http_auth_request_set, // 看一下这函数实现，印证了猜测是正确的
+      NGX_HTTP_LOC_CONF_OFFSET,
+      0,
+      NULL },
+
+      ngx_null_command
+};
+       整理一下，就是当接收到api的返回信息后，模块处理了设置变量。so配置为如下，测试ok，继续
+server {
+    listen  80;
+
+    location / {
+        auth_request  /api.php; #用php模拟
+        auth_request_set  $url 192.168.1.101:81; #保持简单，先用正确值模拟
+        proxy_pass  $url;
+    }
+
+    location ~ \.php$ { # 为了处理上面的 /api.php 
+        root           html;
+        fastcgi_pass   127.0.0.1:9000;
+        fastcgi_index  index.php;
+        fastcgi_param  SCRIPT_FILENAME  $document_root/$fastcgi_script_name;
+        include        fastcgi_params;
+    }
+}
+         任务2.4：让$url的值从api返回信息里获取
+         (请不要在2.3里一步搞定整个模拟，保持每步正确和简单，是不是很像代码重构的原则)
+
+         我们要解决这个：auth_request_set   $url  192.168.1.101:81;
+
+         nginx有什么变量可以让我们获取请求的返回信息呢，头部信息也可以（其实这里心里已经判断肯定只能从头部信息里获取，以对nginx的代码熟悉了解程度）。去看下获取变量值的函数吧。
+
+ngx_http_variable_value_t *
+ngx_http_get_variable(ngx_http_request_t *r, ngx_str_t *name, ngx_uint_t key)
+{
+    ...
+    v = ngx_hash_find(&cmcf->variables_hash, key, name->data, name->len);
+
+    if (v) {
+        if (v->flags & NGX_HTTP_VAR_INDEXED) {
+            return ngx_http_get_flushed_variable(r, v->index);
+
+        } else {
+
+            vv = ngx_palloc(r->pool, sizeof(ngx_http_variable_value_t));
+
+            if (vv && v->get_handler(r, vv, v->data) == NGX_OK) {
+                return vv;
+            }
+
+            return NULL;
+        }
+    }
+
+    vv = ngx_palloc(r->pool, sizeof(ngx_http_variable_value_t));
+    if (vv == NULL) {
+        return NULL;
+    }
+
+    // 我清楚nginx可以通过 http_xxx 获取请求的头部信息 xxx: ...
+    if (ngx_strncmp(name->data, "http_", 5) == 0) {
+
+        if (ngx_http_variable_unknown_header_in(r, vv, (uintptr_t) name)
+            == NGX_OK)
+        {
+            return vv;
+        }
+
+        return NULL;
+    }
+
+    // 这个没看过，不知道哪个版本加上的，感觉很意外，看名字应该就是我要找的
+    if (ngx_strncmp(name->data, "sent_http_", 10) == 0) {
+        // 这个函数怎么实现的，看了下类似上面的，上面用于获取header_in即请求，
+           它用于获取header_out，就是我们要的响应信息
+        if (ngx_http_variable_unknown_header_out(r, vv, (uintptr_t) name)
+            == NGX_OK) 
+        {
+            return vv;
+        }
+
+        return NULL;
+    }
+
+    ...
+
+    vv->not_found = 1;
+
+    return vv;
+}
+         到这里心里已经很有数了，写php代码，并且直接访问测试正常
+api.php
+
+<?php
+
+$url = "192.168.1.101:81";
+header("url: $url");
+         改nginx配置：        
+server {
+    listen  80;
+
+    location / {
+        auth_request  /api.php; #用php模拟
+        auth_request_set  $url $sent_http_url; #保持简单，先用正确值模拟
+        proxy_pass  $url;
+    }
+
+    location ~ \.php$ { # 为了处理上面的 /api.php 
+        root           html;
+        fastcgi_pass   127.0.0.1:9000;
+        fastcgi_index  index.php;
+        fastcgi_param  SCRIPT_FILENAME  $document_root/$fastcgi_script_name;
+        include        fastcgi_params;
+    }
+} 
+        搞定，心情特好 ，预期半个小时验证方案，提前5分钟完成。
+
+
+5、整个方案整理：
+
+a、> ./configure --with-http_auth_request_module && make && ./objs/nginx
+
+b、nginx.conf
+
+server {
+    listen  80;
+
+    location / {
+        auth_request  /api.php; #用php模拟
+        auth_request_set  $url $sent_http_url; #保持简单，先用正确值模拟
+        proxy_pass  $url;
+    }
+
+    location ~ \.php$ { # 为了处理上面的 /api.php 
+        root           html;
+        fastcgi_pass   127.0.0.1:9000;
+        fastcgi_index  index.php;
+        fastcgi_param  SCRIPT_FILENAME  $document_root/$fastcgi_script_name;
+        include        fastcgi_params;
+    }
+} 
+
+
+server {
+    listen  81;
+
+    location / {
+        root  html;
+    }
+}
+   c、api.php
+<?php
+
+$url = "192.168.1.101:81";
+header("url: $url");
+
+https://my.oschina.net/fqing/blog/347365
