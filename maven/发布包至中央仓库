@@ -49,6 +49,7 @@ SCM url
 安装GPG
 
 MacBook安装GPG非常简单，下载并安装GPG Suite即可。
+### 本机win10下gpg4win不论通过bash还是gui都上传公钥失败，改用git-bash自带gpg才上传成功（暂没细究原因）
 
 生成GPG密钥对
 
