@@ -46,10 +46,10 @@
 web页面欠费订单查询来源
 ### 统计报表
 营收、订单、服务车辆、服务次数相关
-> [营收明细](http://citypark-dev.cloud-dahua.com/#/revenue/revenueDetail)，[魔墙]
+> [营收明细](http://citypark-dev.cloud-dahua.com/#/revenue/revenueDetail)，[停车欠费管理](http://citypark-dev.cloud-dahua.com/#/workbench/parkingArrearsManager)等
 ### 数据可视化
 营收、订单、服务车辆、服务次数相关
-> [营收明细](http://citypark-dev.cloud-dahua.com/#/revenue/revenueDetail)，[魔墙]
+> [营收明细](http://citypark-dev.cloud-dahua.com/#/revenue/revenueDetail)，[魔墙](http://citypark-dev.cloud-dahua.com/#/overview/dataOverview)等
 ## 停车数据接出第三方
 1. 接出至支付宝无感支付停车数据
 2. 接出至各个第三方平台
@@ -66,4 +66,4 @@ web页面欠费订单查询来源
 > 通过http接口接入之数据中心，数据中心生成缴费金额和其他信息
 ### 缴费数据使用
 1. 实收相关报表和可视化
-[魔墙]
+[魔墙](http://citypark-dev.cloud-dahua.com/#/overview/dataOverview)等
