@@ -1,10 +1,10 @@
 ## 前言
 说到Spring Security的实现原理，大部分都知道是通过过滤器链。因为Spring Security中的所有功能都是通过过滤器链来实现的，这些过滤器组成一个完整的过滤器链。那么这些过滤器链是如何初始化的？我们之前说的AuthenticationManager又是如何初始化的？前面我们对Spring Security的一些核心过滤器以及组件有了一定的了解。由于初始化流程相对复杂，因此我们并没有一开始从这一块分析。
 
-初始化流程分析
+### 初始化流程分析
 Spring Security初始化流程整体上来说还是很好理解的，但是这里涉及的零碎知识比较多，因此这里先介绍一下常见的关键组件，在理解这些组件的基础上，在来分析初始化流程。
 
-ObjectPostProcessor
+### ObjectPostProcessor
 ObjectPostProcessor是Spring Security中使用频率最高的组件之一，它是一个对象后置处理器，也就是当一个对象创建成功后，如果还有一些额外的事情需要补充，那么可以通过ObjectPostProcessor来进行处理。这个接口中只有一个默认的postProcess
 
 ObjectPostProcessor默认有两个继承类：
@@ -19,7 +19,7 @@ ObjectPostProcessor默认有两个继承类：
 
 这就是对象后置处理器ObjectPostProcessor的主要作用。
 
-SecurityFilterChain
+### SecurityFilterChain
 从名字上看，我们可以知道SecurityFilterChain是Spring Security中的过滤器链对象：
 ```
 public interface SecurityFilterChain {
@@ -78,7 +78,7 @@ public final class DefaultSecurityFilterChain implements SecurityFilterChain {
 
 *需要注意的是，在一个Spring Security项目中，SecurityFilterChain的实例可能会有多个。
 
-SecurityBuilder
+### SecurityBuilder
 Spring Secuirty中所有需要构建的对象都可以通过SecurityBuilder来实现，默认的过滤器链、代理过滤器、AuthenticationManager等，都可以通过SecurityBuilder来构建。
 
 ![image](https://user-images.githubusercontent.com/15857347/172551527-f12cbfaa-342d-4c65-ae70-54b28725bcfb.png)
@@ -95,7 +95,7 @@ public interface SecurityBuilder<O> {
 ```
 可以看到接口中只有一个build方法，就是对象构建方法。build方法的返回值，就是具体构建的对象泛型O，也就是说不通的SecurityBuild将会构建出不同的对象。
 
-HttpSecurityBuilder
+### HttpSecurityBuilder
 HttpSecurityBuilder是用来构建HttpSecurity对象的，HttpSecurityBuilder的定义如下
 ```
 public interface HttpSecurityBuilder<H extends HttpSecurityBuilder<H>>
@@ -150,7 +150,7 @@ public interface HttpSecurityBuilder<H extends HttpSecurityBuilder<H>>
 
 - （9）、addFilter方法可以添加一个过滤器，这个过滤器必须是SpringSecurity提供的过滤器的一个实例或者其扩展，会自动进行过滤器的排序。
 
-AbstractSecurityBuilder
+### AbstractSecurityBuilder
 AbstractConfiguredSecurityBuilder实现了ScurityBuilder接口，并对build做了完善，确保只build一次，我们来看一下：
 ```
 public abstract class AbstractSecurityBuilder<O> implements SecurityBuilder<O> {
@@ -190,7 +190,7 @@ public abstract class AbstractSecurityBuilder<O> implements SecurityBuilder<O> {
 
 - （4）、doBuild方法则是具体的构建方法，该方法在AbstractSecurityBuilder中是一个抽象方法，具体的实现在其子类中。
 
-AbstractConfiguredSecurityBuilder
+### AbstractConfiguredSecurityBuilder
 AbstractConfiguredSecurityBuilder的源码较长，我们分开来看。
 
 首先在AbstractConfiguredSecurityBuilder中声明一个枚举，用来描述构建过程的不同状态
@@ -386,7 +386,7 @@ protected abstract O performBuild() throws Excep
 
 这就是AbstractConfiguredSecurityBuilder中最主要的几个方法，其他一些方法比较简单了就。
 
-ProviderManagerBuilder
+### ProviderManagerBuilder
 ProviderManagerBuilder继承自SecurityBuild接口，并指定了构建的对象是AuthenticationManager，如下：
 ```
 public interface ProviderManagerBuilder<B extends ProviderManagerBuilder<B>>
@@ -399,7 +399,7 @@ public interface ProviderManagerBuilder<B extends ProviderManagerBuilder<B>>
 ```
 可以看到，ProviderManagerBuilder中增加了一个authenticationProvider方法，同时通过泛型指定了构建的对象为AuthenticationManager。
 
-AuthenticationManagerBuilder
+### AuthenticationManagerBuilder
 AuthenticationManagerBuilder用来构建AuthenticationManager对象，它继承自AbstractConfiguredSecurityBuilder，并且实现了ProviderManagerBuilder接口，我们截取部分常用代码来看：
 ```
 public class AuthenticationManagerBuilder
