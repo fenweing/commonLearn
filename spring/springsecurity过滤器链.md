@@ -1,4 +1,4 @@
-前言
+## 前言
 说到Spring Security的实现原理，大部分都知道是通过过滤器链。因为Spring Security中的所有功能都是通过过滤器链来实现的，这些过滤器组成一个完整的过滤器链。那么这些过滤器链是如何初始化的？我们之前说的AuthenticationManager又是如何初始化的？前面我们对Spring Security的一些核心过滤器以及组件有了一定的了解。由于初始化流程相对复杂，因此我们并没有一开始从这一块分析。
 
 初始化流程分析
@@ -8,6 +8,7 @@ ObjectPostProcessor
 ObjectPostProcessor是Spring Security中使用频率最高的组件之一，它是一个对象后置处理器，也就是当一个对象创建成功后，如果还有一些额外的事情需要补充，那么可以通过ObjectPostProcessor来进行处理。这个接口中只有一个默认的postProcess
 
 ObjectPostProcessor默认有两个继承类：
+![image](https://user-images.githubusercontent.com/15857347/172551478-efb7eb70-ebeb-417b-9ea9-f4b8cf1952d8.png)
 
 
 - AutowireBeanFactoryObjectPostProcessor：由于SpringSecurity中大量采用了JAVA配置，许多过滤器都是直接new出来的，这些直接new出来的对象并不会自动注入到Spring容器中。Spring Security这样做的本意是简化配置，但是却带来了另一个问题，大量new出来的对象需要我们手动注册到Spring容器中。AutowireBeanFactoryObjectPostProcessor对象所承担的就是这件事情，一个对象new出来之后，只要调用AutowireBeanFactoryObjectPostProcessor#postProcess方法就可以成功注入到Spring容器中，它的实现原理就是通过调用Spring容器中的AutowireCapableBeanFactory对象将一个new出来的对象注入到Spring容器中。
@@ -80,6 +81,7 @@ public final class DefaultSecurityFilterChain implements SecurityFilterChain {
 SecurityBuilder
 Spring Secuirty中所有需要构建的对象都可以通过SecurityBuilder来实现，默认的过滤器链、代理过滤器、AuthenticationManager等，都可以通过SecurityBuilder来构建。
 
+![image](https://user-images.githubusercontent.com/15857347/172551527-f12cbfaa-342d-4c65-ae70-54b28725bcfb.png)
 
 
 SecurityBuilder，我们先开看看它的源码：
