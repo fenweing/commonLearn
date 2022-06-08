@@ -477,3 +477,4 @@ public class AuthenticationManagerBuilder
 - （6）、performBuild 方法则只需具体的构建工作，常用的AuthenticationManager实例就是ProviderManager，所以这里创建ProviderManager对象，并且配置authenticationProviders和parentAuthenticationManager对象，ProviderManager对象创建成功之后，再去创建后置处理器中处理一遍在返回。
 
 这就是AuthenticationManagerBuilder中的一个大致逻辑。
+https://blog.csdn.net/qq_40409260/article/details/123526149
